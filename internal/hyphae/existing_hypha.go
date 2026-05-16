@@ -31,6 +31,9 @@ func RenameHyphaTo(h ExistingHypha, newName string, replaceName func(string) str
 		h.canonicalName = newName
 		h.mycoFilePath = replaceName(h.mycoFilePath)
 		h.mediaFilePath = replaceName(h.mediaFilePath)
+	case *HTMLHypha:
+		h.canonicalName = newName
+		h.htmlFilePath = replaceName(h.htmlFilePath)
 	}
 
 	byNames[h.CanonicalName()] = h
@@ -77,4 +80,12 @@ func WriteToMycoFile(h ExistingHypha, data []byte) error {
 		}
 	}
 	return nil
+}
+
+// WriteToHTMLFile writes raw HTML data to the hypha's .html file, creating parent directories as needed.
+func WriteToHTMLFile(h *HTMLHypha, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(h.HTMLFilePath()), 0777); err != nil {
+		return err
+	}
+	return os.WriteFile(h.HTMLFilePath(), data, 0666)
 }

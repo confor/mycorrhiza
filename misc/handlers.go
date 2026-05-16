@@ -62,6 +62,8 @@ func handlerList(w http.ResponseWriter, rq *http.Request) {
 			entries = append(entries, listDatum{h.CanonicalName(), ""})
 		case *hyphae.MediaHypha:
 			entries = append(entries, listDatum{h.CanonicalName(), filepath.Ext(h.MediaFilePath())[1:]})
+		case *hyphae.HTMLHypha:
+			entries = append(entries, listDatum{h.CanonicalName(), "html"})
 		}
 	}
 	viewList(viewutil.MetaFrom(w, rq), entries)

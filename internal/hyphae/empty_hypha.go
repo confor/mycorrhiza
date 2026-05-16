@@ -29,3 +29,11 @@ func ExtendEmptyToMedia(e *EmptyHypha, mediaFilePath string) *MediaHypha {
 		mediaFilePath: mediaFilePath,
 	}
 }
+
+// ExtendEmptyToHTML returns a new HTML hypha with the same name as the given empty hypha. The created hypha is not stored yet.
+func ExtendEmptyToHTML(e *EmptyHypha, htmlFilePath string) *HTMLHypha {
+	return &HTMLHypha{
+		canonicalName: e.CanonicalName(),
+		htmlFilePath:  htmlFilePath,
+	}
+}

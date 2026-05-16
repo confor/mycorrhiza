@@ -34,6 +34,12 @@ func Index(path string) {
 				)
 			case *MediaHypha: // no conflict
 				Insert(ExtendTextualToMedia(storedHypha, foundHypha.mediaFilePath))
+			case *HTMLHypha: // collision: textual and html can't coexist, keep textual
+				slog.Info("File collision",
+					"hypha", foundHypha.CanonicalName(),
+					"keptFile", storedHypha.TextFilePath(),
+					"droppedFile", foundHypha.HTMLFilePath(),
+				)
 			}
 
 		case *MediaHypha:
@@ -47,6 +53,28 @@ func Index(path string) {
 					"hypha", foundHypha.CanonicalName(),
 					"usingFile", foundHypha.MediaFilePath(),
 					"insteadOf", storedHypha.MediaFilePath(),
+				)
+			case *HTMLHypha: // collision: media and html can't coexist, keep media
+				slog.Info("File collision",
+					"hypha", foundHypha.CanonicalName(),
+					"keptFile", storedHypha.MediaFilePath(),
+					"droppedFile", foundHypha.HTMLFilePath(),
+				)
+			}
+
+		case *HTMLHypha:
+			switch foundHypha := foundHypha.(type) {
+			case *HTMLHypha: // conflict! overwrite
+				storedHypha.htmlFilePath = foundHypha.htmlFilePath
+				slog.Info("File collision",
+					"hypha", foundHypha.CanonicalName(),
+					"usingFile", foundHypha.HTMLFilePath(),
+					"insteadOf", storedHypha.HTMLFilePath(),
+				)
+			case *TextualHypha, *MediaHypha: // collision: keep html
+				slog.Info("File collision",
+					"hypha", foundHypha.CanonicalName(),
+					"keptFile", storedHypha.HTMLFilePath(),
 				)
 			}
 		}
@@ -73,16 +101,22 @@ func indexHelper(path string, nestLevel uint, ch chan ExistingHypha) {
 		}
 
 		var (
-			hyphaPartPath           = filepath.ToSlash(filepath.Join(path, node.Name()))
-			hyphaName, isText, skip = mimetype.DataFromFilename(hyphaPartPath)
+			hyphaPartPath                   = filepath.ToSlash(filepath.Join(path, node.Name()))
+			hyphaName, isText, isHTML, skip = mimetype.DataFromFilename(hyphaPartPath)
 		)
 		if !skip {
-			if isText {
+			switch {
+			case isHTML:
+				ch <- &HTMLHypha{
+					canonicalName: hyphaName,
+					htmlFilePath:  hyphaPartPath,
+				}
+			case isText:
 				ch <- &TextualHypha{
 					canonicalName: hyphaName,
 					mycoFilePath:  hyphaPartPath,
 				}
-			} else {
+			default:
 				ch <- &MediaHypha{
 					canonicalName: hyphaName,
 					mycoFilePath:  "",

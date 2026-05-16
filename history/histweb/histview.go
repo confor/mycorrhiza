@@ -50,6 +50,8 @@ func handlerPrimitiveDiff(w http.ResponseWriter, rq *http.Request) {
 		h            = hyphae.ByName(util.CanonicalName(slug))
 	)
 	switch h := h.(type) {
+	case *hyphae.HTMLHypha:
+		mycoFilePath = h.HTMLFilePath()
 	case hyphae.ExistingHypha:
 		mycoFilePath = h.TextFilePath()
 	case *hyphae.EmptyHypha:

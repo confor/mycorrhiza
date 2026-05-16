@@ -44,6 +44,8 @@ func MarkupOptions(hyphaName string) options.Options {
 			case *hyphae.MediaHypha:
 				rawText, err = hyphae.FetchMycomarkupFile(h)
 				binaryBlock = mediaRaw(h)
+			case *hyphae.HTMLHypha:
+				err = errors.New("Hypha " + hyphaName + " is raw HTML and cannot be transcluded")
 			}
 			return
 		},

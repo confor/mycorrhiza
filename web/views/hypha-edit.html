@@ -67,6 +67,15 @@
                 {{end}}
             {{end}}
         </h1>
+        {{if .IsNew}}
+            <fieldset class="edit-form__type">
+                <legend>{{block "content type" .}}Content type{{end}}</legend>
+                <label><input type="radio" name="type" value="myco" {{if not .IsHTML}}checked{{end}}> Mycomarkup</label>
+                <label><input type="radio" name="type" value="html" {{if .IsHTML}}checked{{end}}> Raw HTML</label>
+            </fieldset>
+        {{else}}
+            <input type="hidden" name="type" value="{{if .IsHTML}}html{{else}}myco{{end}}">
+        {{end}}
         <textarea name="text" class="edit-form__textarea" autofocus>{{.Content}}</textarea>
         <p class="edit-form__message-zone">
             <input

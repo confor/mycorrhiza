@@ -97,6 +97,9 @@ func fetchText(h hyphae.Hypha) string {
 	switch h := h.(type) {
 	case *hyphae.EmptyHypha:
 		return ""
+	case *hyphae.HTMLHypha:
+		// HTML hyphae do not contribute backlinks (no mycomarkup links to parse).
+		return ""
 	case *hyphae.TextualHypha:
 		path = h.TextFilePath()
 	case *hyphae.MediaHypha:

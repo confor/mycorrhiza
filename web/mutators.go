@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/bouncepaw/mycorrhiza/hypview"
 	"github.com/bouncepaw/mycorrhiza/internal/hyphae"
@@ -152,6 +153,7 @@ func handlerEdit(w http.ResponseWriter, rq *http.Request) {
 		h         = hyphae.ByName(hyphaName)
 
 		isNew   bool
+		isHTML  bool
 		content string
 		err     error
 	)
@@ -161,9 +163,18 @@ func handlerEdit(w http.ResponseWriter, rq *http.Request) {
 		return
 	}
 
-	switch h.(type) {
+	switch h := h.(type) {
 	case *hyphae.EmptyHypha:
 		isNew = true
+	case *hyphae.HTMLHypha:
+		isHTML = true
+		bs, readErr := os.ReadFile(h.HTMLFilePath())
+		if readErr != nil && !os.IsNotExist(readErr) {
+			slog.Error("Failed to fetch HTML file", "err", readErr)
+			viewutil.HttpErr(meta, http.StatusInternalServerError, hyphaName, lc.Get("ui.error_text_fetch"))
+			return
+		}
+		content = string(bs)
 	default:
 		content, err = hyphae.FetchMycomarkupFile(h)
 		if err != nil {
@@ -178,6 +189,7 @@ func handlerEdit(w http.ResponseWriter, rq *http.Request) {
 			"HyphaName": hyphaName,
 			"Content":   content,
 			"IsNew":     isNew,
+			"IsHTML":    isHTML,
 			"Message":   "",
 			"Preview":   "",
 		})
@@ -190,18 +202,28 @@ func handlerUploadText(w http.ResponseWriter, rq *http.Request) {
 		u    = user.FromRequest(rq)
 		meta = viewutil.MetaFrom(w, rq)
 
-		hyphaName = util.HyphaNameFromRq(rq, "upload-text")
-		h         = hyphae.ByName(hyphaName)
-		_, isNew  = h.(*hyphae.EmptyHypha)
+		hyphaName    = util.HyphaNameFromRq(rq, "upload-text")
+		h            = hyphae.ByName(hyphaName)
+		_, isNew     = h.(*hyphae.EmptyHypha)
+		_, isExistHTML = h.(*hyphae.HTMLHypha)
 
 		textData = rq.PostFormValue("text")
 		action   = rq.PostFormValue("action")
 		message  = rq.PostFormValue("message")
+		typeStr  = rq.PostFormValue("type")
 	)
 
+	// For existing hyphae, the type is fixed by what's on disk. For new hyphae, the form picks.
+	isHTML := isExistHTML || (isNew && typeStr == "html")
+
 	if action == "preview" {
-		ctx, _ := mycocontext.ContextFromStringInput(textData, mycoopts.MarkupOptions(hyphaName))
-		preview := template.HTML(mycomarkup.BlocksToHTML(ctx, mycomarkup.BlockTree(ctx)))
+		var preview template.HTML
+		if isHTML {
+			preview = template.HTML(textData)
+		} else {
+			ctx, _ := mycocontext.ContextFromStringInput(textData, mycoopts.MarkupOptions(hyphaName))
+			preview = template.HTML(mycomarkup.BlocksToHTML(ctx, mycomarkup.BlockTree(ctx)))
+		}
 
 		_ = pageHyphaEdit.RenderTo(
 			viewutil.MetaFrom(w, rq),
@@ -209,13 +231,20 @@ func handlerUploadText(w http.ResponseWriter, rq *http.Request) {
 				"HyphaName": hyphaName,
 				"Content":   textData,
 				"IsNew":     isNew,
+				"IsHTML":    isHTML,
 				"Message":   message,
 				"Preview":   preview,
 			})
 		return
 	}
 
-	if err := shroom.UploadText(h, []byte(textData), message, u); err != nil {
+	var err error
+	if isHTML {
+		err = shroom.UploadHTML(h, []byte(textData), message, u)
+	} else {
+		err = shroom.UploadText(h, []byte(textData), message, u)
+	}
+	if err != nil {
 		viewutil.HttpErr(meta, http.StatusForbidden, hyphaName, err.Error())
 		return
 	}

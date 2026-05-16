@@ -43,6 +43,73 @@ func writeTextToDisk(h hyphae.ExistingHypha, data []byte, hop *history.Op) error
 	return nil
 }
 
+func writeHTMLToDisk(h *hyphae.HTMLHypha, data []byte, hop *history.Op) error {
+	if err := hyphae.WriteToHTMLFile(h, data); err != nil {
+		return err
+	}
+	hop.WithFiles(h.HTMLFilePath())
+
+	return nil
+}
+
+// UploadHTML edits the hypha's raw HTML content and makes a history record about that.
+// Used both to create a new HTML hypha (from an EmptyHypha) and to overwrite an existing one.
+func UploadHTML(h hyphae.Hypha, data []byte, userMessage string, u *user.User) error {
+	hop := history.
+		Operation(history.TypeEditText).
+		WithMsg(historyMessageForTextUpload(h, userMessage)).
+		WithUser(u)
+
+	if !u.CanProceed("upload-text") {
+		rejectEditLog(h, u, "no rights")
+		hop.Abort()
+		return errors.New("ui.act_no_rights")
+	}
+
+	if !hyphae.IsValidName(h.CanonicalName()) {
+		hop.Abort()
+		return errors.New("invalid hypha name")
+	}
+
+	if len(bytes.TrimSpace(data)) == 0 {
+		hop.Abort()
+		return nil
+	}
+
+	switch h := h.(type) {
+	case *hyphae.EmptyHypha:
+		parts := []string{files.HyphaeDir()}
+		parts = append(parts, strings.Split(h.CanonicalName()+".html", "\\")...)
+		H := hyphae.ExtendEmptyToHTML(h, filepath.Join(parts...))
+
+		if err := writeHTMLToDisk(H, data, hop); err != nil {
+			hop.Abort()
+			return err
+		}
+		hyphae.Insert(H)
+	case *hyphae.HTMLHypha:
+		oldBytes, err := os.ReadFile(h.HTMLFilePath())
+		if err != nil && !os.IsNotExist(err) {
+			hop.Abort()
+			return err
+		}
+		if bytes.Equal(data, oldBytes) {
+			hop.Abort()
+			return nil
+		}
+		if err := writeHTMLToDisk(h, data, hop); err != nil {
+			hop.Abort()
+			return err
+		}
+	default:
+		hop.Abort()
+		return errors.New("cannot upload HTML to non-HTML hypha")
+	}
+
+	hop.Apply()
+	return nil
+}
+
 // UploadText edits the hypha's text part and makes a history record about that.
 func UploadText(h hyphae.Hypha, data []byte, userMessage string, u *user.User) error {
 	hop := history.

@@ -126,6 +126,19 @@ func handlerRevisionText(w http.ResponseWriter, rq *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = io.WriteString(w, textContents)
 
+	case *hyphae.HTMLHypha:
+		var textContents, err = history.FileAtRevision(h.HTMLFilePath(), revHash)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			slog.Error("Failed to serve html source",
+				"err", err, "hyphaName", h.CanonicalName(), "revHash", revHash)
+			_, _ = io.WriteString(w, "Error: "+err.Error())
+			return
+		}
+		slog.Info("Serving html source", "hyphaName", h.CanonicalName(), "revHash", revHash)
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.WriteString(w, textContents)
+
 	case hyphae.ExistingHypha:
 		if !h.HasTextFile() {
 			slog.Info("Media hypha has no text part; cannot serve it",
@@ -164,8 +177,12 @@ func handlerRevision(w http.ResponseWriter, rq *http.Request) {
 		textContents string
 		err          error
 		mycoFilePath string
+		isHTML       bool
 	)
 	switch h := h.(type) {
+	case *hyphae.HTMLHypha:
+		mycoFilePath = h.HTMLFilePath()
+		isHTML = true
 	case hyphae.ExistingHypha:
 		mycoFilePath = h.TextFilePath()
 	case *hyphae.EmptyHypha:
@@ -173,8 +190,12 @@ func handlerRevision(w http.ResponseWriter, rq *http.Request) {
 	}
 	textContents, err = history.FileAtRevision(mycoFilePath, revHash)
 	if err == nil {
-		ctx, _ := mycocontext.ContextFromStringInput(textContents, mycoopts.MarkupOptions(hyphaName))
-		contents = template.HTML(mycomarkup.BlocksToHTML(ctx, mycomarkup.BlockTree(ctx)))
+		if isHTML {
+			contents = template.HTML(textContents)
+		} else {
+			ctx, _ := mycocontext.ContextFromStringInput(textContents, mycoopts.MarkupOptions(hyphaName))
+			contents = template.HTML(mycomarkup.BlocksToHTML(ctx, mycomarkup.BlockTree(ctx)))
+		}
 	}
 
 	meta := viewutil.MetaFrom(w, rq)
@@ -192,6 +213,10 @@ func handlerText(w http.ResponseWriter, rq *http.Request) {
 	util.PrepareRq(rq)
 	hyphaName := util.HyphaNameFromRq(rq, "text")
 	switch h := hyphae.ByName(hyphaName).(type) {
+	case *hyphae.HTMLHypha:
+		slog.Info("Serving html source", "path", h.HTMLFilePath())
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		http.ServeFile(w, rq, h.HTMLFilePath())
 	case hyphae.ExistingHypha:
 		slog.Info("Serving text part", "path", h.TextFilePath())
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -254,13 +279,20 @@ func handlerHypha(w http.ResponseWriter, rq *http.Request) {
 		data["Contents"] = ""
 		_ = pageHypha.RenderTo(meta, data)
 	case hyphae.ExistingHypha:
-		fileContentsT, err := os.ReadFile(h.TextFilePath())
-		if err == nil {
-			ctx, _ := mycocontext.ContextFromStringInput(string(fileContentsT), mycoopts.MarkupOptions(hyphaName))
-			getOpenGraph, descVisitor, imgVisitor := tools.OpenGraphVisitors(ctx)
-			ast := mycomarkup.BlockTree(ctx, descVisitor, imgVisitor)
-			openGraph = template.HTML(getOpenGraph())
-			contents = template.HTML(mycomarkup.BlocksToHTML(ctx, ast))
+		if htmlH, ok := h.(*hyphae.HTMLHypha); ok {
+			fileContentsH, err := os.ReadFile(htmlH.HTMLFilePath())
+			if err == nil {
+				contents = template.HTML(fileContentsH)
+			}
+		} else {
+			fileContentsT, err := os.ReadFile(h.TextFilePath())
+			if err == nil {
+				ctx, _ := mycocontext.ContextFromStringInput(string(fileContentsT), mycoopts.MarkupOptions(hyphaName))
+				getOpenGraph, descVisitor, imgVisitor := tools.OpenGraphVisitors(ctx)
+				ast := mycomarkup.BlockTree(ctx, descVisitor, imgVisitor)
+				openGraph = template.HTML(getOpenGraph())
+				contents = template.HTML(mycomarkup.BlocksToHTML(ctx, ast))
+			}
 		}
 		switch h := h.(type) {
 		case *hyphae.MediaHypha:

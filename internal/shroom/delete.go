@@ -27,6 +27,8 @@ func Delete(u *user.User, h hyphae.ExistingHypha) error {
 		}
 	case *hyphae.TextualHypha:
 		hop.WithFilesRemoved(h.TextFilePath())
+	case *hyphae.HTMLHypha:
+		hop.WithFilesRemoved(h.HTMLFilePath())
 	}
 	if hop.Apply().HasErrors() {
 		return hop.Errs[0]

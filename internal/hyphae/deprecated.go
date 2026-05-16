@@ -30,6 +30,9 @@ func FetchMycomarkupFile(h Hypha) (string, error) {
 			return "", err
 		}
 		return string(text), nil
+	case *HTMLHypha:
+		// HTML hyphae have no mycomarkup content to fetch.
+		return "", nil
 	}
 	panic("unreachable")
 }
